@@ -1,0 +1,915 @@
+---
+title: "COVID-19 Pernambuco: Modelos Preditivos"
+output:
+   flexdashboard::flex_dashboard:
+    #orientation: rows
+    #vertical_layout: scroll
+    #theme: default
+# runtime: shiny
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(flexdashboard)
+library(shiny)
+source('./global.R')
+source('./exponencial_pernambuco.R')
+source('./linear_pernambuco.R')
+source('./logistico_pernambuco.R')
+source('./potencia_pernambuco.R')
+source('./sir_pernambuco.R')
+source('./sir_pernambuco_completo.R')
+source('./log_log_pernambuco.R')
+source('./plato_pernambuco.R')
+source('./xts_pernambuco.R')
+source('./acuidades.R')
+```
+
+Abertura {data-icon="fa-book-open"}
+===================================== 
+
+Column
+-------------------------------------
+### Apresentação e Disclaimers
+
+**Todos os modelos estão errados; a questão prática é - o quão errados eles podem estar e ainda assim serem úteis?** (George Box, 1987)
+
+As predições apresentadas nesta plataforma são as melhores disponíveis, utilizando diferentes técnicas e referências teóricas.
+
+Contudo, este trabalho possui relevantes **limitações de uso**, sendo as principais:
+
+* **Subnotificação**: o número de casos confirmados é consideravelmente menor que o número total de infectados. Esse é um problema internacional por causa da escassez de testes e do elevado número de infectados assintomáticos. No caso nacional, é ainda mais grave, pois nem Pernambuco nem nenhum Estado do Brasil tem um programa de testes em massa.
+ 
+* **Valores ruidosos**: ocorrência de valores altos ou baixos demais para o padrão dos dados. Às vezes, devido ao aumento de testes disponíveis, por exemplo, podemos ter um crescimento fora do padrão no número de confirmados. 
+
+* **Efeito rebote**: boa parte dos eventos do passado só são descobertos muito tempo depois. Por exemplo: o dado de óbito de um dia qualquer não significa que o paciente morreu naquele dia Isso tem impacto forte nos modelos de predição e atrapalha a tomada de decisão, pois os modelos têm de predizer o passado e o futuro ao mesmo tempo. 
+
+* **Comparabilidade**: é difícil comparar os dados com demais estados e países, devido à grande variação de fatores como o número de testes disponíveis e os protocolos de testes e notificação .
+
+### Instruções de Usos
+
+O principal objetivo deste material é facilitar a tomada de decisão, oferecendo as melhores análises descritivas e preditivias disponíveis no momento atual. 
+
+Para isso, divide-se em algumas abas:
+
+* [Descritiva](#descritiva): análises descritivas do comportamento e padrões encontrados nas diferentes bases de dados disponíveis, sobretudo em relação a óbitos, confirmações e leitos. 
+* [Confirmados](#confirmados): modelagem preditiva dos casos confirmados no Estado de Pernambuco, com opções de modelagem para curto, médio e longo prazo. 
+* [Óbitos](#óbitos): modelagem preditiva dos óbitos no Estado de Pernambuco, baseada em cenários que comparam a evolução da pandemia em outros países com a situação estadual.
+* [Tabelas](#tabelas): tabelas completas com dados reais até o momento e dados obtidos a partir dos modelos preditivos.
+* [Outros Modelos](#outros-modelos): apresentação resumida dos resultados encontrados com a utilização de modelos que foram descartados da modelagem final, mas que poderiam ser viáveis.
+* [Isolamento](#isolamento): análise descritiva das principais métricas de isolamento social disponíveis: apple, google e inloco.
+
+Descritiva {data-icon="fa-signal"}
+===================================== 
+
+Column {.tabset}
+-------------------------------------
+
+### Óbitos - Relatório x Fato
+
+```{r descritiva obitos}
+plotly::plot_ly(data = base_obitos_dt) %>%
+  add_trace(
+    x = ~data,
+    y = ~newDeaths,
+    type = 'scatter', mode = 'lines',
+    name = 'Data do Relatório',
+    line = list(color = "black"),
+    marker = list(color = "black")
+  )  %>%
+  add_trace(
+    x = ~data,
+    y = ~obitosNovos,
+    type = 'scatter', mode = 'lines',
+    name = "Data do Óbito",
+    line = list(color = "orange"),
+    marker = list(color = "orange")
+  )  %>%
+  plotly::layout(
+    yaxis = list(title = "Relatório x Óbito"),
+    xaxis = list(title = "Data"),
+    legend = list(x = 0.1, y = 0.9),
+    hovermode = "compare"
+  )
+```
+
+### Óbitos - Relatório x Fato (Média Móvel)
+
+```{r descritiva obitos mm}
+plotly::plot_ly(data = base_obitos_dt) %>%
+  add_trace(
+    x = ~data,
+    y = ~deaths_mm10,
+    type = 'scatter', mode = 'lines',
+    name = 'Data do Relatório',
+    line = list(color = "black"),
+    marker = list(color = "black")
+  )  %>%
+  add_trace(
+    x = ~data,
+    y = ~obitos_mm10,
+    type = 'scatter', mode = 'lines',
+    name = "Data do Óbito",
+    line = list(color = "orange"),
+    marker = list(color = "orange")
+  )  %>%
+  plotly::layout(
+    yaxis = list(title = "Relatório x Óbito (Média Móvel)"),
+    xaxis = list(title = "Data"),
+    legend = list(x = 0.1, y = 0.9),
+    hovermode = "compare"
+  )
+```
+
+### Solicitações x Óbito (Associação)
+
+```{r descritiva solXobt mm}
+cortest <- cor.test(base_obitos_dt$solicitacoes_mm10, base_obitos_dt$obitos_mm10)
+
+fig <- plot_ly(data = base_obitos_dt, x = ~solicitacoes_mm10, y = ~obitos_mm10, color = ~data) %>%
+  plotly::layout(
+    title = paste("Dispersão de Solicitações de SRAG e Óbitos por Data do fato", '- Correlação', round(cor(base_obitos_dt$solicitacoes_mm10, base_obitos_dt$obitos_mm10),2)), 
+    yaxis = list(title = "Óbitos x Solicitações (Média Móvel)"),
+    xaxis = list(title = "Data"),
+    legend = list(x = 0.1, y = 0.9),
+    hovermode = "compare"
+  )
+fig
+```
+
+### Solicitações x Óbitos (Média Móvel)
+
+```{r descritiva obitos solicitacoes mm}
+plotly::plot_ly(data = base_obitos_dt) %>%
+  add_trace(
+    x = ~data,
+    y = ~solicitacoes_mm10,
+    type = 'scatter', mode = 'lines',
+    name = 'Solicitação por Data do Fato',
+    line = list(color = "black"),
+    marker = list(color = "black")
+  )  %>%
+  add_trace(
+    x = ~data,
+    y = ~obitos_mm10,
+    type = 'scatter', mode = 'lines',
+    name = "Óbito por Data do Fato",
+    line = list(color = "orange"),
+    marker = list(color = "orange")
+  )  %>%
+  plotly::layout(
+    yaxis = list(title = "Relatório x Óbito (Média Móvel)"),
+    xaxis = list(title = "Data"),
+    legend = list(x = 0.1, y = 0.9),
+    hovermode = "compare"
+  )
+```
+
+### Sazonalidade das Solicitações
+
+```{r descritiva sazonal sol1}
+p <- ggplot(solicitacoes_totais, aes(x=dia, y=solicitacoes, fill=dia)) + geom_boxplot() 
+
+fig <- ggplotly(p) %>% plotly::layout(
+  title = 'Solicitações SRAG por dia da Semana (Histograma)',
+  yaxis = list(title = "Solicitações"),
+  xaxis = list(title = "Dia da Semana"),
+  hovermode = "compare"
+) 
+
+fig
+
+# plot_ly(solicitacoes_totais, y = ~solicitacoes, color = ~dia, type = "box") %>% plotly::layout(
+#   title = 'Solicitações SRAG por dia da Semana (Histograma)',
+#   yaxis = list(title = "Solicitações"),
+#   xaxis = list(title = "Dia da Semana"),
+#   hovermode = "compare"
+# ) 
+```
+
+Confirmados {data-icon="fa-diagnoses"}
+===================================== 
+
+Column {.tabset data-width=250}
+-------------------------------------
+### Utilização dos modelos
+
+A escolha dos modelos envolve, sobretudo, duas questões: a análise dos erros e do comportamento das predições ao longo do tempo. 
+
+Existem muitas métricas diferentes para análise do erro, mas aqui focaremos em apenas duas: 
+
+* Erro Médio Absoluto - MAE: erro geral do modelo, por meio da média absoluta dos desvios entre os dados reais e os dados preditos pelo modelo
+* Erro Quadrático Médio - RMSE: erro geral do modelo, mas penaliza mais os desvios, permitindo perceber se o modelo é mais robusto para "choques" (valores ruidosos nos dados)
+
+```{r}
+metricas_filter <- metricas[c(1, 3, 5, 6),c(2,3)]
+metricas_filter
+```
+
+Os menores níveis de erro MAE e RMSE estão com o **Modelo Log Logístico**. Contudo, **esse modelo perde eficácia para predições de médio e longo prazo**, pois tende a subestimar a duração da doença (como se pode ver no gráfico ao lado).
+
+Em segundo lugar, está o **Modelo de Lei de Potência**, que tem a vantagem de não estar sujeito à perda de eficácia no médio prazo.
+
+Finalmente, o **Modelo SIR**, embora possua erros relevantes, é o único que permite observar todo o comportamento esperado da pandemia. 
+
+Assim, ficamos com a seguinte orientação: 
+ 
+ * **Predições de curto prazo** (até 5 dias): Modelo Log-Logístico é mais útil; 
+ * **Predições de médio prazo** (10 ou até 15 dias): Modelo de Lei de Potência mostra-se mais útil;
+ * **Predições de longo prazo**: apenas o Modelo SIR permite - apesar de seu elevado erro. 
+
+Column {.tabset}
+-------------------------------------
+
+### Modelo Logístico
+
+O modelo logístico é criado através da busca otimizada pelos melhores parâmetros que ajustam os dados a uma curva logística teórica. Essa curva tende à forma de "S", sendo também conhecida como curva sigmoide. 
+
+```{r modelos preditivos log}
+plotly::plot_ly(data = pred_log) %>%
+  plotly::add_trace(
+    x = ~data,
+    y = ~predicao,
+    type = 'scatter', mode = 'lines',
+    name = "predicao",
+    line = list(color = "blue"),
+    marker = list(color = "blue")
+  )  %>%
+  add_trace(
+    x = ~data,
+    y = ~totalCases,
+    type = 'scatter', mode = 'lines',
+    name = "real",
+    line = list(color = "red"),
+    marker = list(color = "red")
+  ) %>%
+  plotly::layout(
+    title = "Predição por Modelagem Logística",
+    yaxis = list(title = "Real x Predição"),
+    xaxis = list(title = "Data"),
+    legend = list(x = 0.1, y = 0.9),
+    hovermode = "compare"
+  )
+```
+
+### Modelo Log-logístico
+
+**Melhor modelo para estimativas de Curto Prazo**  
+
+```{r modelos preditivos ll}
+
+m <- subset(pred_ll, data == max(pe_relatorio$data)+5)
+
+a <- list(
+  x = m$data,
+  y = m$predicao,
+  text = 'Limite da Eficácia',
+  xref = "x",
+  yref = "y",
+  showarrow = TRUE,
+  arrowhead = 7,
+  ax = -40,
+  ay = -40
+)
+
+plotly::plot_ly(data = pred_ll) %>%
+  plotly::add_trace(
+    x = ~data,
+    y = ~predicao,
+    type = 'scatter', mode = 'lines',
+    name = "predicao",
+    line = list(color = "blue"),
+    marker = list(color = "blue")
+  )  %>%
+  add_trace(
+    x = ~data,
+    y = ~confirmados,
+    type = 'scatter', mode = 'lines',
+    name = "real",
+    line = list(color = "red"),
+    marker = list(color = "red")
+  ) %>%
+  plotly::layout(
+    #title = "Predição por Modelagem Log-Logística",
+    annotations = a,
+    yaxis = list(title = "Real x Predição"),
+    xaxis = list(title = "Data"),
+    legend = list(x = 0.1, y = 0.9),
+    hovermode = "compare"
+  )
+```
+
+### Modelo Lei de Potência
+
+**Melhor modelo para estimativas de Médio Prazo**
+
+```{r modelos preditivos lp}
+plotly::plot_ly(data = pred_lp) %>%
+  plotly::add_trace(
+    x = ~data,
+    y = ~predicao,
+    type = 'scatter', mode = 'lines',
+    name = "predicao",
+    line = list(color = "blue"),
+    marker = list(color = "blue")
+  )  %>%
+  add_trace(
+    x = ~data,
+    y = ~confirmados,
+    type = 'scatter', mode = 'lines',
+    name = "real",
+    line = list(color = "red"),
+    marker = list(color = "red")
+  ) %>%
+  plotly::layout(
+    #title = "Predição por Modelagem de Lei da Potência",
+    yaxis = list(title = "Real x Predição"),
+    xaxis = list(title = "Data"),
+    legend = list(x = 0.1, y = 0.9),
+    hovermode = "compare"
+  )
+```
+
+### Modelo epidemiológico SIR
+
+**Único modelo que permite estimar toda a epidemia**
+
+```{r modelos preditivos sir confirmados}
+
+m1 <- subset(pred_sir_comp, pred_sir_comp$I == max(pred_sir_comp$I))
+
+a1 <- list(
+  x = m1$data,
+  y = m1$I,
+  text = paste(m1$I, 'em', m1$data),
+  xref = "x",
+  yref = "y",
+  showarrow = TRUE,
+  arrowhead = 7,
+  ax = -40,
+  ay = -30
+)
+
+plotly::plot_ly(data = pred_sir_comp) %>%
+  add_trace(
+    x = ~data,
+    y = ~I,
+    type = 'scatter', mode = 'lines',
+    name = "predicao",
+    line = list(color = "red"),
+    marker = list(color = "red")
+  )  %>%
+  add_trace(
+    x = ~data,
+    y = ~totalCases,
+    type = 'scatter', mode = 'markers',
+    name = "real",
+    line = list(color = "blues"),
+    marker = list(color = "blue")
+  ) %>%
+  plotly::layout(
+    title = paste('R0', round(unname(R0),2), 'beta', round(unname(Opt_par[1]),2), 'gama', round(unname(Opt_par[2]),2)),
+    annotations = a1,
+    yaxis = list(title = "Real x Predição"),
+    xaxis = list(title = "Data"),
+    legend = list(x = 0.1, y = 0.9),
+    hovermode = "compare"
+  )
+```
+
+### Modelo combinado: SIR + Log-Logístico
+
+Modelo combinado para estimar a duração completa da epidemia, uma vez que o modelo SIR estima os infectados como fluxo e não como estoque
+
+```{r modelos preditivos ensemble}
+
+plotly::plot_ly(data = pred_ll_plato) %>%
+  add_trace(
+    x = ~data,
+    y = ~predicao,
+    type = 'scatter', mode = 'lines',
+    name = "predicao",
+    line = list(color = "red"),
+    marker = list(color = "red")
+  )  %>%
+  add_trace(
+    x = ~data,
+    y = ~totalCases,
+    type = 'scatter', mode = 'markers',
+    name = "real",
+    line = list(color = "blues"),
+    marker = list(color = "blue")
+  ) %>%
+  plotly::layout(
+    autosize = T,
+    yaxis = list(title = "Real x Predição"),
+    xaxis = list(title = "Data"),
+    legend = list(x = 0.1, y = 0.9),
+    hovermode = "compare"
+  )
+```
+
+### Modelo combinado / Milhão de Habitantes
+
+```{r modelos preditivos ensemble pop}
+
+plotly::plot_ly(data = pred_ll_plato) %>%
+  add_trace(
+    x = ~data,
+    y = espanhaCasosMilhao,
+    type = 'scatter', mode = 'lines',
+    name = "Espanha",
+    line = list(color = "comsilk", dash = 'dash')
+    )  %>%
+  add_trace(
+    x = ~data,
+    y = belgicaCasosMilhao,
+    type = 'scatter', mode = 'lines',
+    name = "Belgica",
+    line = list(color = "purple", dash = 'dash')
+    )  %>%
+  add_trace(
+    x = ~data,
+    y = brasilCasosMilhao,
+    type = 'scatter', mode = 'lines',
+    name = "Brasil",
+    line = list(color = "cyan", dash = 'dash')
+    )  %>%
+  add_trace(
+    x = ~data,
+    y = ~ceil(predicao/9.55),
+    type = 'scatter', mode = 'lines',
+    name = "predicao",
+    line = list(color = "red"),
+    marker = list(color = "red")
+  )  %>%
+  add_trace(
+    x = ~data,
+    y = ~ceil(totalCases/9.55),
+    type = 'scatter', mode = 'markers',
+    name = "real",
+    line = list(color = "blues"),
+    marker = list(color = "blue")
+  ) %>%
+  plotly::layout(
+    yaxis = list(title = "Real x Predição"),
+    xaxis = list(title = "Data"),
+    legend = list(x = 0, y = 1.2),
+    hovermode = "compare"
+  )
+```
+
+Óbitos {data-icon="fa-exclamation-triangle"}
+===================================== 
+
+Column {.tabset}
+-------------------------------------
+
+### Óbitos Totais
+
+```{r modelos preditivos obitos totais}
+plotly::plot_ly(data = pred_ll_plato) %>%
+  # add_trace(
+  #   x = ~data,
+  #   y = ~pred_ob_let_alta,
+  #   type = 'scatter', mode = 'lines',
+  #   name = 'Cenário Pessimista',
+  #   line = list(color = "red"),
+  #   marker = list(color = "red")
+  # )  %>%
+  add_trace(
+    x = ~data,
+    y = ~pred_ob_let_tend,
+    type = 'scatter', mode = 'lines',
+    name = "Cenário Pessimista",
+    line = list(color = "orange"),
+    marker = list(color = "orange")
+  )  %>%
+  add_trace(
+    x = ~data,
+    y = ~pred_ob_let_mod,
+    type = 'scatter', mode = 'lines',
+    name = "Cenário Moderado",
+    line = list(color = "blue"),
+    marker = list(color = "blue")
+  )  %>%
+  add_trace(
+    x = ~data,
+    y = ~pred_ob_let_baixa,
+    type = 'scatter', mode = 'lines',
+    name = "Cenário Otimista",
+    line = list(color = "green"),
+    marker = list(color = "green")
+  ) %>%
+add_trace(
+  x = ~data,
+  y = ~deaths,
+  type = 'scatter', mode = 'markers',
+  name = "Obitos",
+  line = list(color = "black"),
+  marker = list(color = "black")
+) %>%
+  plotly::layout(
+    yaxis = list(title = "Real x Predição"),
+    xaxis = list(title = "Data"),
+    legend = list(x = 0.1, y = 0.9),
+    hovermode = "compare"
+  )
+```
+
+### Óbitos Totais / Milhão de Habitantes
+
+```{r modelos preditivos obitos por milhao}
+plotly::plot_ly(data = pred_ll_plato) %>%
+  add_trace(
+    x = ~data,
+    y = espanhaMortesMilhao,
+    type = 'scatter', mode = 'lines',
+    name = "Espanha",
+    line = list(color = "comsilk", dash = 'dash')
+    )  %>%
+  add_trace(
+    x = ~data,
+    y = belgicaMortesMilhao,
+    type = 'scatter', mode = 'lines',
+    name = "Belgica",
+    line = list(color = "purple", dash = 'dash')
+    )  %>%
+  add_trace(
+    x = ~data,
+    y = brasilMortesMilhao,
+    type = 'scatter', mode = 'lines',
+    name = "Brasil",
+    line = list(color = "cyan", dash = 'dash')
+    )  %>%
+  # add_trace(
+  #   x = ~data,
+  #   y = ~ceil(pred_ob_let_alta/9.55),
+  #   type = 'scatter', mode = 'lines',
+  #   name = 'Cenário Pessimista',
+  #   line = list(color = "red"),
+  #   marker = list(color = "red")
+  # )  %>%
+  add_trace(
+    x = ~data,
+    y = ~ceil(pred_ob_let_tend/9.55),
+    type = 'scatter', mode = 'lines',
+    name = "Cenário  Pessimista",
+    line = list(color = "orange"),
+    marker = list(color = "orange")
+  )  %>%
+  add_trace(
+    x = ~data,
+    y = ~ceil(pred_ob_let_mod/9.55),
+    type = 'scatter', mode = 'lines',
+    name = "Cenário Moderado",
+    line = list(color = "blue"),
+    marker = list(color = "blue")
+  )  %>%
+  add_trace(
+    x = ~data,
+    y = ~ceil(pred_ob_let_baixa/9.55),
+    type = 'scatter', mode = 'lines',
+    name = "Cenário Otimista",
+    line = list(color = "green"),
+    marker = list(color = "green")
+  ) %>%
+add_trace(
+  x = ~data,
+  y = ~ceil(deaths/9.55),
+  type = 'scatter', mode = 'markers',
+  name = "Obitos",
+  line = list(color = "black"),
+  marker = list(color = "black")
+) %>%
+  plotly::layout(
+    yaxis = list(title = "Real x Predição"),
+    xaxis = list(title = "Data"),
+    legend = list(x = 0.1, y = 0.9),
+    hovermode = "compare"
+  )
+```
+
+### Óbitos por Dia 
+
+Ós óbitos por dia foram calculados com base na variação diária (fluxo) do modelo de óbitos totais. 
+
+```{r modelos preditivos obitos dia}
+plotly::plot_ly(data = pred_ll_plato) %>%
+  # add_trace(
+  #   x = ~data,
+  #   y = ~ob_alta_dia,
+  #   type = 'scatter', mode = 'lines',
+  #   name = 'Cenário Pessimista',
+  #   line = list(color = "red"),
+  #   marker = list(color = "red")
+  # )  %>%
+  add_trace(
+    x = ~data,
+    y = ~ob_tend_dia,
+    type = 'scatter', mode = 'lines',
+    name = "Cenário  Pessimista",
+    line = list(color = "orange"),
+    marker = list(color = "orange")
+  )  %>%
+  add_trace(
+    x = ~data,
+    y = ~ob_mod_dia,
+    type = 'scatter', mode = 'lines',
+    name = "Cenário Moderado",
+    line = list(color = "blue"),
+    marker = list(color = "blue")
+  )  %>%
+  add_trace(
+    x = ~data,
+    y = ~ob_baixa_dia,
+    type = 'scatter', mode = 'lines',
+    name = "Cenário Otimista",
+    line = list(color = "green"),
+    marker = list(color = "green")
+  ) %>%
+add_trace(
+  x = ~data,
+  y = ~newDeaths,
+  type = 'scatter', mode = 'markers',
+  name = "Obitos Relatório",
+  line = list(color = "black"),
+  marker = list(color = "black")
+) %>%
+  add_trace(
+  x = ~data,
+  y = ~obitosNovos,
+  type = 'scatter', mode = 'markers',
+  name = "Obitos Fato",
+  line = list(color = "red"),
+  marker = list(color = "red")
+) %>%
+  plotly::layout(
+    yaxis = list(title = "Real x Predição"),
+    xaxis = list(title = "Data"),
+    legend = list(x = 0.1, y = 0.9),
+    hovermode = "compare"
+  )
+```
+
+### Óbitos por Semana (Média Semanal)
+
+Ós óbitos por Semana foram calculados com base na média semanal, indicando em quais e por quantas semana o número de óbitos tende a ser maior. 
+
+```{r modelos preditivos obitos semana}
+plotly::plot_ly(data = ob_dia_df) %>%
+  add_trace(
+    x = ~data,
+    y = ~tend,
+    type = 'scatter', mode = 'lines',
+    name = "Cenário  Pessimista",
+    line = list(color = "orange"),
+    marker = list(color = "orange")
+  )  %>%
+  add_trace(
+    x = ~data,
+    y = ~mod,
+    type = 'scatter', mode = 'lines',
+    name = "Cenário Moderado",
+    line = list(color = "blue"),
+    marker = list(color = "blue")
+  )  %>%
+  add_trace(
+    x = ~data,
+    y = ~baixa,
+    type = 'scatter', mode = 'lines',
+    name = "Cenário Otimista",
+    line = list(color = "green"),
+    marker = list(color = "green")
+  ) %>%
+  add_trace(
+    x = ~data,
+    y = ~real,
+    type = 'scatter', mode = 'lines',
+    name = 'Óbitos - Relatório',
+    line = list(color = "black"),
+    marker = list(color = "black")
+  )  %>%
+  add_trace(
+    x = ~data,
+    y = ~fato,
+    type = 'scatter', mode = 'lines',
+    name = 'Óbitos - Fato',
+    line = list(color = "red"),
+    marker = list(color = "red")
+  )  %>%
+  plotly::layout(
+    yaxis = list(title = "Real x Predição"),
+    xaxis = list(title = "Data"),
+    legend = list(x = 0.1, y = 0.9),
+    hovermode = "compare"
+  )
+```
+
+Tabelas {data-icon="fa-table"}
+=====================================
+
+Column {.tabset}
+-------------------------------------
+
+### Próximos 5 dias
+
+```{r}
+pred_ll_filter <- subset(pred_ll, data >= '2020-04-19' & data <= '2020-04-23')
+
+DT::datatable(pred_ll_filter, extensions = c('Buttons', 'KeyTable', 'Responsive'), rownames = FALSE, options = list(keys = TRUE, dom = 'Bfrtip', buttons = c('csv'))
+)
+```
+
+### Próximos 15 dias
+
+```{r}
+pred_lp_filter <- subset(pred_lp, data >= '2020-04-19' & data <= '2020-05-03')
+
+DT::datatable(pred_lp_filter, extensions = c('Buttons', 'KeyTable', 'Responsive'), rownames = FALSE, options = list(keys = TRUE, dom = 'Bfrtip', buttons = c('csv'))
+)
+```
+
+### Pandemia Completa
+
+```{r}
+DT::datatable(pred_ll_plato, extensions = c('Buttons', 'KeyTable', 'Responsive'), rownames = FALSE, options = list(keys = TRUE, dom = 'Bfrtip', buttons = c('csv'))
+)
+```
+
+### Letalidade por Idade
+
+```{r}
+DT::datatable(idades, extensions = c('Buttons', 'KeyTable', 'Responsive'), rownames = FALSE, options = list(keys = TRUE, dom = 'Bfrtip', buttons = c('csv'))
+)
+```
+
+Outros Modelos {data-icon="fa-signal"}
+===================================== 
+
+Os modelos nesta página foram testados, mas foram descartados, seja pelo erro associado, seja pelo viés a encurtar a pandemia. 
+
+Column {.tabset}
+-------------------------------------
+
+### Modelo Log-linear
+
+O modelo log-linear é criado através de uma regressão linear do logaritmo do total de casos, que, posteriormente é transformado de volta para escala original. 
+
+```{r modelos preditivos lm}
+plotly::plot_ly(data = pred_lm) %>%
+  plotly::add_trace(
+    x = ~data,
+    y = ~fit,
+    type = 'scatter', mode = 'lines',
+    name = "predicao",
+    line = list(color = "blue"),
+    marker = list(color = "blue")
+  )  %>%
+  add_trace(
+    x = ~data,
+    y = ~totalCases,
+    type = 'scatter', mode = 'lines',
+    name = "real",
+    line = list(color = "red"),
+    marker = list(color = "red")
+  ) %>%
+  plotly::layout(
+    title = "Predição por Regressão Log-linear",
+    yaxis = list(title = "Real x Predição"),
+    xaxis = list(title = "Data"),
+    legend = list(x = 0.1, y = 0.9),
+    hovermode = "compare"
+  )
+```
+
+### Modelo Exponencial
+
+O modelo exponencial é criado através da busca otimizada pelos melhores parâmetros que ajustam os dados a uma curva exponencial teórica. Esse modelo é bastante semelhante ao log-linear, mas respeita a forma natural dos dados.  
+
+```{r modelos preditivos exp}
+plotly::plot_ly(data = pred_exp) %>%
+  plotly::add_trace(
+    x = ~data,
+    y = ~predicao,
+    type = 'scatter', mode = 'lines',
+    name = "predicao",
+    line = list(color = "blue"),
+    marker = list(color = "blue")
+  )  %>%
+  add_trace(
+    x = ~data,
+    y = ~totalCases,
+    type = 'scatter', mode = 'lines',
+    name = "real",
+    line = list(color = "red"),
+    marker = list(color = "red")
+  ) %>%
+  plotly::layout(
+    title = "Predição por Modelagem Exponencial",
+    yaxis = list(title = "Real x Predição"),
+    xaxis = list(title = "Data"),
+    legend = list(x = 0.1, y = 0.9),
+    hovermode = "compare"
+  )
+```
+
+### Modelo epidemiológico SIR (I)
+
+O modelo epidemiológico - Suscetíveis, Infectados e Recuprados (SIR) é criado através da resoluação de um sistema dinâmico de equações, que estimam os parâmetros que movimentam as pessoas entre os três pontos (S -> I -> R).  
+
+```{r modelos preditivos sir1}
+plotly::plot_ly(data = pred_sir) %>%
+  plotly::add_trace(
+    x = ~data,
+    y = ~I,
+    type = 'scatter', mode = 'lines',
+    name = "predicao",
+    line = list(color = "blue"),
+    marker = list(color = "blue")
+  )  %>%
+  add_trace(
+    x = ~data,
+    y = ~totalCases,
+    type = 'scatter', mode = 'lines',
+    name = "real",
+    line = list(color = "red"),
+    marker = list(color = "red")
+  ) %>%
+  plotly::layout(
+    title = "Predição por Modelo Epidemiológico (SIR)",
+    yaxis = list(title = "Real x Predição"),
+    xaxis = list(title = "Data"),
+    legend = list(x = 0.1, y = 0.9),
+    hovermode = "compare"
+  )
+```
+
+Isolamento {data-icon="fa-chart-line"}
+===================================== 
+
+Column {.tabset data-width=600} 
+-------------------------------------
+
+### Apple
+
+```{r isolamento apple}
+plotly::plot_ly(data = appleMob) %>%
+  plotly::add_trace(
+    x = ~Date,
+    y = ~Mob,
+    type = 'scatter', mode = 'lines',
+    name = "Solicitacoes de Rota",
+    line = list(color = "blue"),
+    marker = list(color = "blue")
+  ) %>%
+  plotly::layout(
+    title = "Mobilidade Apple",
+    yaxis = list(title = "Variações nas Solicitações de Rotas"),
+    xaxis = list(title = "Data"),
+    legend = list(x = 0.1, y = 0.9),
+    hovermode = "compare"
+  )
+```
+
+### Google
+
+```{r isolamento google}
+plotly::plot_ly(data = googleMob) %>%
+  plotly::add_trace(
+    x = ~date,
+    y = ~residential_percent_change_from_baseline,
+    type = 'scatter', mode = 'lines',
+    name = "Pessoas nas suas Residências",
+    line = list(color = "blue"),
+    marker = list(color = "blue")
+  ) %>%
+  plotly::layout(
+    title = "Mobilidade Google",
+    yaxis = list(title = "Variações na permanência das pessoas em suas Residências"),
+    xaxis = list(title = "Data"),
+    legend = list(x = 0.1, y = 0.9),
+    hovermode = "compare"
+  )
+```
+
+### InLoco
+
+```{r isolamento inloco}
+plotly::plot_ly(data = inlocoMob) %>%
+  plotly::add_trace(
+    x = ~Date,
+    y = ~isolamento_pe,
+    type = 'scatter', mode = 'lines',
+    name = "Pessoas nas suas Residências",
+    line = list(color = "blue"),
+    marker = list(color = "blue")
+  ) %>%
+  plotly::layout(
+    title = "Mobilidade Google",
+    yaxis = list(title = "Variações na permanência das pessoas em suas Residências"),
+    xaxis = list(title = "Data"),
+    legend = list(x = 0.1, y = 0.9),
+    hovermode = "compare"
+  )
+```
